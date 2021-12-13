@@ -1,10 +1,8 @@
 const axios = require('axios');
-const _ = require('lodash');
-const moment = require('moment');
-const { ethers } = require('ethers');
 const tweet = require('./tweet');
-const {db} = require('db');
 const discord = require("./discord");
+const { ethers } = require('ethers');
+const { db } = require('db');
 
 const processDelaySeconds = 600;
 
@@ -109,7 +107,9 @@ const main = () => {
 
     Object.values(blockEvents).forEach(setBlock);
 
-    await postEvents();
+    try {
+      await postEvents();
+    } catch (e) {}
 
   }, processDelaySeconds);
 }
