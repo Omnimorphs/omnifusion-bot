@@ -10,27 +10,25 @@ const twitterConfig = {
 
 const twitterClient = new twit(twitterConfig);
 
-// Tweet a text-based status
-async function tweet(tweetText) {
-    const tweet = {
-        status: tweetText,
-    };
-
-    twitterClient.post('statuses/update', tweet, (error, tweet, response) => {
-        if (!error) {
-            console.log(`Successfully tweeted: ${tweetText}`);
-        } else {
-            console.error(error);
-        }
-    });
+/**
+ *
+ * @param {{sender: string, toBurn: number, toFuse: number, imageUrl}} fusion
+ * @return {string}
+ */
+const formatTweet = (fusion) => {
+    return `${fusion.sender} fused Omnimorph #${fusion.toFuse} and #${fusion.toBurn}!`;
 }
 
-// OPTIONAL - use this method if you want the tweet to include the full image file of the OpenSea item in the tweet.
-async function tweetWithImage(tweetText, imageUrl) {
+/**
+ *
+ * @param {{sender: string, toBurn: number, toFuse: number, imageUrl}} fusion
+ * @return {Promise<void>}
+ */
+async function tweet(fusion) {
     // Format our image to base64
-    const processedImage = await getBase64(imageUrl);
+    const processedImage = await getBase64(fusion.imageUrl);
+    const tweetText = formatTweet(fusion);
 
-    // Upload the item's image from OpenSea to Twitter & retrieve a reference to it
     twitterClient.post('media/upload', { media_data: processedImage }, (error, media, response) => {
         if (!error) {
             const tweet = {
@@ -57,6 +55,5 @@ function getBase64(url) {
 }
 
 module.exports = {
-    tweet: tweet,
-    tweetWithImage: tweetWithImage
+    tweet
 };

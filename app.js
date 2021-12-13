@@ -3,76 +3,115 @@ const _ = require('lodash');
 const moment = require('moment');
 const { ethers } = require('ethers');
 const tweet = require('./tweet');
-const cache = require('./cache');
+const {db} = require('db');
+const discord = require("./discord");
 
-// Format tweet text
-function formatAndSendTweet(event) {
-    // Handle both individual items + bundle sales
-    const assetName = _.get(event, ['asset', 'name'], _.get(event, ['asset_bundle', 'name']));
-    const openseaLink = _.get(event, ['asset', 'permalink'], _.get(event, ['asset_bundle', 'permalink']));
+const processDelaySeconds = 600;
 
-    const totalPrice = _.get(event, 'total_price');
+const baseUri = process.env.BASE_URI;
 
-    const tokenDecimals = _.get(event, ['payment_token', 'decimals']);
-    const tokenUsdPrice = _.get(event, ['payment_token', 'usd_price']);
-    const tokenEthPrice = _.get(event, ['payment_token', 'eth_price']);
+const abi = ['event Fused(address sender, uint fusedId, uint burnedId, bytes32 fusionReceiptIPFSHash)'];
 
-    const formattedUnits = ethers.utils.formatUnits(totalPrice, tokenDecimals);
-    const formattedEthPrice = formattedUnits * tokenEthPrice;
-    const formattedUsdPrice = formattedUnits * tokenUsdPrice;
+const address = process.env.CONTRACT_ADDRESS;
 
-    const tweetText = `${assetName} bought for ${formattedEthPrice}${ethers.constants.EtherSymbol} ($${Number(formattedUsdPrice).toFixed(2)}) #NFT ${openseaLink}`;
+const provider = ethers.getDefaultProvider(process.env.CONTRACT_NETWORK);
 
-    console.log(tweetText);
+const contract = new ethers.Contract(address, abi, provider);
 
-    // OPTIONAL PREFERENCE - don't tweet out sales below X ETH (default is 1 ETH - change to what you prefer)
-    // if (Number(formattedEthPrice) < 1) {
-    //     console.log(`${assetName} sold below tweet price (${formattedEthPrice} ETH).`);
-    //     return;
-    // }
-
-    // OPTIONAL PREFERENCE - if you want the tweet to include an attached image instead of just text
-    // const imageUrl = _.get(event, ['asset', 'image_url']);
-    // return tweet.tweetWithImage(tweetText, imageUrl);
-
-    return tweet.tweet(tweetText);
+const setLatestBlockHash = (blockHash) => {
+  db.json.latestBlockHash = blockHash;
+  db.save();
 }
 
-// Poll OpenSea every 60 seconds & retrieve all sales for a given collection in either the time since the last sale OR in the last minute
-setInterval(() => {
-    const lastSaleTime = cache.get('lastSaleTime', null) || moment().startOf('minute').subtract(59, "seconds").unix();
+/**
+ *
+ * @param {{getBlock: () => any, blockHash: string, args: {sender: string, fusedId: any, burnedId: any, fusionReceiptIPFSHash: string}}[]} events
+ * @return {Promise<void>}
+ */
+const setBlock = async (events) => {
+  if (events.length === 0) {
+    return;
+  }
 
-    console.log(`Last sale (in seconds since Unix epoch): ${cache.get('lastSaleTime', null)}`);
+  const block = await events[0].getBlock();
 
-    axios.get('https://api.opensea.io/api/v1/events', {
-        headers: {
-            'X-API-KEY': process.env.X_API_KEY
-        },
-        params: {
-            collection_slug: process.env.OPENSEA_COLLECTION_SLUG,
-            event_type: 'successful',
-            occurred_after: lastSaleTime,
-            only_opensea: 'false'
-        }
-    }).then((response) => {
-        const events = _.get(response, ['data', 'asset_events']);
+  if (db.json.blocks[block.hash]) {
+    return;
+  }
 
-        const sortedEvents = _.sortBy(events, function(event) {
-            const created = _.get(event, 'created_date');
+  const timestamp = block.timestamp;
 
-            return new Date(created);
-        })
+  db.json.blocks[block.hash] = {
+    events: events.map(event => ({
+      sender: event.args.sender,
+      fusedId: event.args.fusedId.toNumber(),
+      burnedId: event.args.burnedId.toNumber()
+    })),
+    timestamp,
+    hash: block.hash,
+    posted: false
+  }
 
-        console.log(`${events.length} sales since the last one...`);
+  db.save();
+}
 
-        _.each(sortedEvents, (event) => {
-            const created = _.get(event, 'created_date');
+const filterUnPosted = () => {
+  const now = Date.now();
 
-            cache.set('lastSaleTime', moment(created).unix());
+  return Object.values(db.json.blocks).filter(block => !block.posted && block.timestamp - processDelaySeconds >= now);
+}
 
-            return formatAndSendTweet(event);
-        });
-    }).catch((error) => {
-        console.error(error);
-    });
-}, 60000);
+/**
+ *
+ * @param {{sender: string, fusedId: number, burnedId: number}} event
+ */
+const prepareFusion = async event => ({
+  toBurn: event.burnedId,
+  toFuse: event.fusedId,
+  sender: event.sender,
+  imageUrl: (await axios.get(`${baseUri}/${event.fusedId}`)).data.image
+})
+
+
+const postEvents = async () => {
+  const unPosted = filterUnPosted();
+
+  for await (const block of unPosted) {
+    for await (const event of block.events) {
+      const payload = await prepareFusion(event);
+      await tweet.tweet(payload)
+      await discord.send(payload);
+    }
+    block.posted = true;
+    db.save();
+  }
+}
+
+const main = () => {
+  setInterval(async () => {
+    const events = await contract.queryFilter('Fused', db.json.latestBlockHash || undefined);
+
+    if (events.length === 0) {
+      return;
+    }
+
+    setLatestBlockHash(events[events.length - 1].blockHash);
+
+    const blockEvents = {};
+
+    for (const event of events) {
+      if (blockEvents[event.blockHash]) {
+        blockEvents[event.blockHash].push(event);
+      } else {
+        blockEvents[event.blockHash] = [event];
+      }
+    }
+
+    Object.values(blockEvents).forEach(setBlock);
+
+    await postEvents();
+
+  }, processDelaySeconds);
+}
+
+
