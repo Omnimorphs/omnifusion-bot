@@ -1,6 +1,6 @@
 const fs = require('fs');
 
-const path = './db';
+const path = './db.json';
 
 class Db {
 

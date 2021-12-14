@@ -1,10 +1,12 @@
+require('dotenv').config();
+
 const axios = require('axios');
-const tweet = require('./tweet');
+// const tweet = require('./tweet');
 const discord = require("./discord");
 const { ethers } = require('ethers');
-const { db } = require('db');
+const { db } = require('./db');
 
-const processDelaySeconds = 600;
+const processDelayMS = 3000;
 
 const baseUri = process.env.BASE_URI;
 
@@ -33,6 +35,10 @@ const setBlock = async (events) => {
 
   const block = await events[0].getBlock();
 
+  if (!db.json.blocks) {
+    db.json.blocks = {};
+  }
+
   if (db.json.blocks[block.hash]) {
     return;
   }
@@ -54,9 +60,9 @@ const setBlock = async (events) => {
 }
 
 const filterUnPosted = () => {
-  const now = Date.now();
+  const now = Date.now() / 1000;
 
-  return Object.values(db.json.blocks).filter(block => !block.posted && block.timestamp - processDelaySeconds >= now);
+  return Object.values(db.json.blocks || []).filter(block => !block.posted && block.timestamp - processDelayMS < now);
 }
 
 /**
@@ -77,7 +83,7 @@ const postEvents = async () => {
   for await (const block of unPosted) {
     for await (const event of block.events) {
       const payload = await prepareFusion(event);
-      await tweet.tweet(payload)
+      // await tweet.tweet(payload)
       await discord.send(payload);
     }
     block.posted = true;
@@ -109,9 +115,12 @@ const main = () => {
 
     try {
       await postEvents();
-    } catch (e) {}
+    } catch (e) {
+      console.log(e);
+    }
 
-  }, processDelaySeconds);
+  }, processDelayMS);
 }
 
+main();
 

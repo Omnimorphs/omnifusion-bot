@@ -1,18 +1,30 @@
-import Discord from 'discord.js';
+const Discord = require('discord.js');
 
-const discordBot = new Discord.Client();
+const intents = new Discord.Intents();
 
-const  discordSetup = async () => {
+intents.add(Discord.Intents.FLAGS.GUILDS);
+
+const discordBot = new Discord.Client({intents});
+
+let discordChannel;
+
+const discordSetup = async () => {
   return new Promise((resolve, reject) => {
     ['DISCORD_BOT_TOKEN', 'DISCORD_CHANNEL_ID'].forEach((envVar) => {
       if (!process.env[envVar]) reject(`${envVar} not set`)
     })
 
-    discordBot.login(process.env.DISCORD_BOT_TOKEN);
-    discordBot.on('ready', async () => {
-      const channel = await discordBot.channels.fetch(process.env.DISCORD_CHANNEL_ID);
-      resolve(channel);
-    });
+    if (!discordChannel) {
+      discordBot.login(process.env.DISCORD_BOT_TOKEN);
+      discordBot.on('ready', async () => {
+        console.log('bot connected');
+        const channel = await discordBot.channels.fetch(process.env.DISCORD_CHANNEL_ID);
+        discordChannel = channel;
+        resolve(channel);
+      });
+    } else {
+      resolve(discordChannel);
+    }
   })
 }
 
@@ -24,11 +36,17 @@ const  discordSetup = async () => {
 const buildMessage = (fusion) => (
   new Discord.MessageEmbed()
     .setColor('#0099ff')
-    .setTitle(`${fusion.sender} fused Omnimorph #${fusion.toFuse} and #${fusion.toBurn}!`)
-    // .setURL(sale.asset.permalink)  // TODO - do all fusion have an URL?
-    .setAuthor('OmniFusion Bot', 'https://lh3.googleusercontent.com/S36Gqs6mWRd2EpeG3QCY6HubD0O1k_sTslOJbtnx5Lg5EWiebyBhLGJIjebNqfTGU-ALVuUY6_CwGXbc_-ZxXne6T-3pYXqpjKpk=s0', 'https://fusion.omnimorphs.com')
+    .setTitle(`New OmniFusion!`)
+    .setURL('https://fusion.omnimorphs.com')  // TODO - do all fusion have an URL?
+    .addFields(
+      { name: 'Owner', value: fusion.sender },
+      { name: 'Fused token', value: fusion.toFuse.toString() },
+      { name: 'Burned token', value: fusion.toBurn.toString() }
+    )
+    .setAuthor('OmniFusion Bot')
+    .setTimestamp(new Date())
     .setImage(fusion.imageUrl)
-    .setFooter('Try out OmniFusion!', 'https://fusion.omnimoprphs.com')
+    .setFooter('https://fusion.omnimorphs.com')
 );
 
 /**
@@ -38,7 +56,8 @@ const buildMessage = (fusion) => (
 const send = async (fusion) => {
   const channel = await discordSetup();
   const message = buildMessage(fusion);
-  return channel.send(message);
+  console.log(message);
+  return channel.send({embeds: [message]});
 }
 
 module.exports = {
