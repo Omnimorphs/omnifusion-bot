@@ -82,10 +82,15 @@ const postEvents = async () => {
 
   for await (const block of unPosted) {
     for await (const event of block.events) {
-      const payload = await prepareFusion(event);
-      await tweet.tweet(payload)
-      await discord.send(payload);
-      console.log(`Successfully posted #${payload.toFuse} and #${payload.toBurn} to Discord!`);
+      try {
+        const payload = await prepareFusion(event);
+        await tweet.tweet(payload)
+        await discord.send(payload);
+        console.log(`Successfully posted #${payload.toFuse} and #${payload.toBurn} to Discord!`);
+      } catch (e) {
+        console.error(e);
+        return;
+      }
     }
     block.posted = true;
     db.save();
