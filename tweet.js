@@ -16,7 +16,7 @@ const twitterClient = new twit(twitterConfig);
  * @return {string}
  */
 const formatTweet = (fusion) => {
-    return `${fusion.sender} fused Omnimorph #${fusion.toFuse} and #${fusion.toBurn}!`;
+    return `A new Omnimorphs has just been fused: https://opensea.io/assets/0xb5f3dee204ca76e913bb3129ba0312b9f0f31d82/${fusion.toFuse}`;
 }
 
 /**

@@ -37,7 +37,7 @@ const buildMessage = (fusion) => (
   new Discord.MessageEmbed()
     .setColor('#0099ff')
     .setTitle(`New OmniFusion!`)
-    .setURL('https://fusion.omnimorphs.com')  // TODO - do all fusion have an URL?
+    .setURL(`https://opensea.io/assets/0xb5f3dee204ca76e913bb3129ba0312b9f0f31d82/${fusion.toBurn}`)  // TODO - do all fusion have an URL?
     .addFields(
       { name: 'Owner', value: fusion.sender },
       { name: 'Fused token', value: fusion.toFuse.toString() },
