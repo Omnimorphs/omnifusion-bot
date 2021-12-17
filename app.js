@@ -1,12 +1,12 @@
 require('dotenv').config();
 
 const axios = require('axios');
-// const tweet = require('./tweet');
+const tweet = require('./tweet');
 const discord = require("./discord");
 const { ethers } = require('ethers');
 const { db } = require('./db');
 
-const processDelayMS = 3000;
+const processDelayMS = parseInt(process.env.PROCESS_DELAY);
 
 const baseUri = process.env.BASE_URI;
 
@@ -14,7 +14,7 @@ const abi = ['event Fused(address sender, uint fusedId, uint burnedId, bytes32 f
 
 const address = process.env.CONTRACT_ADDRESS;
 
-const provider = ethers.getDefaultProvider(process.env.CONTRACT_NETWORK);
+const provider = new ethers.providers.InfuraProvider(process.env.CONTRACT_NETWORK, process.env.INFURA_APIKEY);
 
 const contract = new ethers.Contract(address, abi, provider);
 
@@ -62,7 +62,7 @@ const setBlock = async (events) => {
 const filterUnPosted = () => {
   const now = Date.now() / 1000;
 
-  return Object.values(db.json.blocks || []).filter(block => !block.posted && block.timestamp - processDelayMS < now);
+  return Object.values(db.json.blocks || []).filter(block => (!block.posted && block.timestamp - processDelayMS < now));
 }
 
 /**
@@ -83,8 +83,9 @@ const postEvents = async () => {
   for await (const block of unPosted) {
     for await (const event of block.events) {
       const payload = await prepareFusion(event);
-      // await tweet.tweet(payload)
+      await tweet.tweet(payload)
       await discord.send(payload);
+      console.log(`Successfully posted #${payload.toFuse} and #${payload.toBurn} to Discord!`);
     }
     block.posted = true;
     db.save();

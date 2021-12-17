@@ -56,7 +56,6 @@ const buildMessage = (fusion) => (
 const send = async (fusion) => {
   const channel = await discordSetup();
   const message = buildMessage(fusion);
-  console.log(message);
   return channel.send({embeds: [message]});
 }
 
