@@ -18,8 +18,8 @@ const provider = new ethers.providers.InfuraProvider(process.env.CONTRACT_NETWOR
 
 const contract = new ethers.Contract(address, abi, provider);
 
-const setLatestBlockHash = (blockHash) => {
-  db.json.latestBlockHash = blockHash;
+const setLatestBlockNumber = (blockNumber) => {
+  db.json.latestBlockHash = blockNumber;
   db.save();
 }
 
@@ -33,15 +33,15 @@ const setBlock = async (events) => {
     return;
   }
 
-  const block = await events[0].getBlock();
-
   if (!db.json.blocks) {
     db.json.blocks = {};
   }
 
-  if (db.json.blocks[block.hash]) {
+  if (db.json.blocks[events[0].blockHash]) {
     return;
   }
+
+  const block = await events[0].getBlock();
 
   const timestamp = block.timestamp;
 
@@ -105,7 +105,7 @@ const main = () => {
       return;
     }
 
-    setLatestBlockHash(events[events.length - 1].blockHash);
+    setLatestBlockNumber(events[events.length - 1].blockNumber);
 
     const blockEvents = {};
 
